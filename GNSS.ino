@@ -2,6 +2,10 @@
 #include <MKRGSM.h>
 #include <Arduino.h>
 #include "wiring_private.h"
+#include <Wire.h> //Needed for I2C to GPS
+
+#include "SparkFun_Ublox_Arduino_Library.h" //http://librarymanager/All#SparkFun_u-blox_GNSS
+SFE_UBLOX_GPS myGPS;
 
 Uart mySerial (&sercom3, 1, 0, SERCOM_RX_PAD_1, UART_TX_PAD_0);
 
@@ -23,7 +27,7 @@ GSM gsmAccess;
 
 // URL, path and port (for example: example.org)
 char server[] = "czeposr.cuzk.cz"; //www.euref-ip.net
-char path[] = "/RTK3-MSM";//RTK3-MSM /CSUM3-MSM
+char path[] = "/CSUM3-MSM";//RTK3-MSM /CSUM3-MSM
 int port = 2101; // port 80 is the default for HTTP 2101
 
 byte gps_set_sucess = 0 ;
@@ -54,10 +58,10 @@ void setup() {
   pinPeripheral(0, PIO_SERCOM); //Assign TX function to pin 0
 
   delay(100);
-
+/*
   //Read NMEA GGA message from ublox for NTRIP client
   for (int i = 0; i <= 5; i++) {
-    if (Serial1.find('\n')) {
+    if (Serial1.find('$GNGGA')) {
       size_nmea = Serial1.readBytesUntil('\n', nmea, 82);
 
       //Wait for GPS fix
@@ -65,6 +69,7 @@ void setup() {
         i = i - 1;
       }
 
+      Serial.print("$GNGGA");
       for (int i = 0 ; i < size_nmea ; i++) {
         Serial.print(nmea[i]);
       }
@@ -74,8 +79,21 @@ void setup() {
 
     delay(100);
   }
+*/
+  //Serial.end();
 
-  Serial.end();
+
+  //Ublox NMEA GGA msg connection
+  Wire.begin();
+
+  if (myGPS.begin() == false)
+  {
+    Serial.println(F("Ublox GPS not detected at default I2C address. Please check wiring. Freezing."));
+    while (1);
+  }
+
+  //This will pipe all NMEA sentences to the serial port so we can see them
+  myGPS.setNMEAOutputPort(client);
 
   //GSM connection
   bool connected = false;
@@ -107,10 +125,15 @@ void setup() {
     client.println("Authorization: Basic Y3Z1dHZ5dWthOmsxNTVkcmVtZWpha29rb25l");
     //client.println("Connection: close");
     client.println();
-
+    /*
+    client.print("$GNGGA");
     for (int i = 0 ; i < size_nmea ; i++) {
       client.print(nmea[i]);
     }
+    */
+    /*
+     * myGPS.checkUblox(); //See if new data is available. Process bytes as they come in.
+     */
   }
 
 
@@ -139,35 +162,40 @@ void setup() {
 
 void loop() {
 
-  GNSS_status =  nmea[48];
+  GNSS_status =  nmea[42];
   led_gnss_status(GNSS_status);
 
-
+  if(Serial1.available()){
+    Serial.write(Serial1.read());
+  }
+/*
   //Send NMEA GGA message to NTRIP
   if (millis() - timer > 20000) {
     Serial1.begin(115200);
     
     //Read NMEA GGS message from ublox
-    if (Serial1.find('\n')) {
+    if (Serial1.find('$GNGGA')) {
       size_nmea = Serial1.readBytesUntil('\n', nmea, 82);
     }
-
+    
+    client.print("$GNGGA");
     for (int i = 0 ; i < size_nmea ; i++) {
-      Serial.print(nmea[i]);
       client.print(nmea[i]);
     }
+    
     Serial.println();
     timer = millis();
     Serial1.end();
   }
-
+*/
+/*
   //Send RTCM data from NTRIP to ublox
   while (client.available()) {
     byte x = client.read();
-    mySerial.write(x);
+    //mySerial.write(x);
     //Serial.write(x);
   }
-
+*/
 }
 
 // Attach the interrupt handler to the SERCOM
